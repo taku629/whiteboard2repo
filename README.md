@@ -70,7 +70,7 @@ samples/          demo boards + cached graph reads
 
 ## Honest notes
 
-- The two sample whiteboards in `samples/` are **AI-generated test images**, not photos of a real meeting. Upload your own photo to try a real board.
+- All sample boards in `samples/` (including `paper_rooms_v1/v2.jpg`, a pen-on-paper version with a blue-ink edit for Re-snap) are **AI-generated test images**, not photos of a real meeting. Upload your own photo to try a real board.
 - Generated code runs in a temporary directory per job. For a public deployment, run builds in a container sandbox.
 - Mutation proof needs the model to cooperate; if it refuses or the mutant survives, the UI says so instead of claiming coverage.
 
