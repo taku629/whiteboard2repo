@@ -24,6 +24,15 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 5. **Board coverage** – every box, arrow and note on the board is checked against the generated repo: services need ≥2 endpoints, databases need SQLAlchemy models, event edges need publish + subscribe, notes need invariant tests. It is a structural check, not a semantic proof; the mutation step is the semantic check. Download the repo as a zip.
 6. **Re-snap** – the design changed? Photograph the board again. Muse Spark Open reads the new photo, `app/diff.py` diffs it against the board the repo was built from (components matched by id, label similarity and their connections, so a relabelled box keeps its code), and the diff is shown on the Mermaid diagram (green added / red removed / amber changed). **Apply update** runs the agent with only the diff: new services get a skeleton, removed ones are deleted, the agent wires new edges and writes tests for new rules while every existing test stays green, and only the **new** invariants go through the mutation proof. The run ends with a changed-files list; board history is kept as `graph.v1.json`, `graph.v2.json`, …
 
+
+## Re-snap → GitHub Pull Request
+
+After an update, **Open Pull Request on GitHub** pushes the change as a branch to a dedicated repository and opens a PR whose body is the proof report: before/after board photos, the board diff (Mermaid), pytest results, the mutation-proof table for every new rule, board coverage, and the changed files. A PR is never marked green when tests fail or a rule's mutant survives.
+
+- The generated repo is kept as a local git tree: the first build is committed on `main` (board v1), each Re-snap update on `w2r/resnap-<job>-v<N>`.
+- Set `W2R_GITHUB_REPO=owner/repo` (an initially empty repo; the baseline is pushed only when it is empty) and `GITHUB_TOKEN` (fine-grained: Contents + Pull requests read/write on that one repo). The token is used only by `app/github_pr.py` (deterministic git + REST, no model calls); it is never sent to the model, saved to job files, or logged.
+- Without a token, the same body is written to `PR_PREVIEW.md`.
+
 ## Re-snap
 
 `samples/board_rooms_v2.jpg` is the same board after the team added a **Payments API** and the rule **"max 3 active bookings per user!"** (also an AI-generated test image). Build `board_rooms` first, then pick the updated sample under *Re-snap*.

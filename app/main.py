@@ -22,6 +22,7 @@ import re
 
 from . import agent, llm, scaffold, vision
 from . import diff as diffmod
+from . import github_pr
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent
@@ -187,6 +188,10 @@ async def resnap(job_id: str, file: UploadFile | None = File(None), sample: str 
     old = json.loads((d / "built.json").read_text())
     data = await file.read() if file is not None else None
     new = _read_upload_or_sample(data, sample, use_cache)
+    if data:
+        (d / "board.next.jpg").write_bytes(data)
+    elif sample and (SAMPLES / f"{Path(sample).name}.jpg").exists():
+        shutil.copy(SAMPLES / f"{Path(sample).name}.jpg", d / "board.next.jpg")
     df = diffmod.diff_graphs(old, new)
     (d / "pending.json").write_text(json.dumps(df["aligned"]))
     return JSONResponse({"job_id": job_id, "graph": df["aligned"], "diff": {k: df[k] for k in
@@ -217,13 +222,25 @@ async def update(job_id: str, request: Request) -> StreamingResponse:
         def sse(ev: dict) -> str:
             return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         t0 = time.time()
+        tests: dict[str, Any] = {}
+        changed: list[str] = []
+        try:
+            github_pr.ensure_baseline(repo, d / "board.jpg")
+        except Exception as e:  # pragma: no cover - git missing
+            yield sse({"type": "thought", "text": f"(git snapshot skipped: {str(e)[:120]})"})
         try:
             for ev in agent.update(old, new, repo, df):
                 ev["t"] = round(time.time() - t0, 1)
+                if ev.get("type") == "tests":
+                    tests = {"ok": ev.get("ok"), **(ev.get("counts") or {})}
+                if ev.get("type") == "changes":
+                    changed = [f"+ {f}" for f in ev.get("added", [])] + [f"~ {f}" for f in ev.get("modified", [])] + \
+                              [f"- {f}" for f in ev.get("deleted", []) or []]
                 yield sse(ev)
         except Exception as e:  # pragma: no cover
             yield sse({"type": "error", "text": str(e)[:500]})
         new_notes = df["invariants"]["added"]
+        proofs: list[dict[str, Any]] = []
         if new_notes:
             yield sse({"type": "proving", "t": round(time.time() - t0, 1)})
             try:
@@ -238,12 +255,37 @@ async def update(job_id: str, request: Request) -> StreamingResponse:
         (d / "version").write_text(str(v))
         (d / "built.json").write_text(json.dumps(graph))
         (d / "coverage.json").write_text(json.dumps(cov))
-        yield sse({"type": "coverage", **cov, "version": v,
+        (d / f"report.v{v}.json").write_text(json.dumps({
+            "version": v, "summary": diffmod.summary_lines(df), "mermaid": diffmod.to_mermaid_diff(old, df),
+            "proofs": proofs, "tests": tests, "coverage": cov, "changed_files": changed}))
+        try:
+            github_pr.snapshot(repo, v, d / "board.next.jpg", f"Re-snap: board v{v-1} -> v{v}\n\n" +
+                               "\n".join(diffmod.summary_lines(df)), branch=f"w2r/resnap-{job_id}-v{v}")
+        except Exception as e:  # pragma: no cover
+            yield sse({"type": "thought", "text": f"(git snapshot skipped: {str(e)[:120]})"})
+        yield sse({"type": "coverage", **cov, "version": v, "can_pr": True,
                    "files": agent.Workspace(repo).list_files().splitlines(),
                    "download": f"/api/download/{job_id}"})
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/github/{job_id}/pr")
+async def github_pr_open(job_id: str, request: Request) -> JSONResponse:
+    """Push the re-snapped update to a dedicated GitHub repo and open a Pull Request."""
+    d = _job(job_id)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    target = github_pr.target_repo() or body.get("repo")
+    if not target or not re.fullmatch(r"[\w.-]+/[\w.-]+", target):
+        raise HTTPException(400, "set W2R_GITHUB_REPO=owner/repo (a dedicated, initially empty repo)")
+    try:
+        return JSONResponse(github_pr.open_pr(d, target, os.getenv("GITHUB_TOKEN")))
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/file/{job_id}")
@@ -258,7 +300,7 @@ def download(job_id: str) -> StreamingResponse:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for p in repo.rglob("*"):
-            if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts:
+            if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts and ".git" not in p.parts:
                 z.write(p, f"whiteboard2repo-{job_id}/{p.relative_to(repo)}")
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/zip",

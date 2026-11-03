@@ -125,6 +125,7 @@
       <div id="diffList" style="margin-top:10px"></div>
       <div id="diffMermaid" class="mermaid" style="margin-top:10px"></div>
       <div class="row" style="margin-top:12px"><button id="applyBtn" disabled>Apply update</button><span class="tag" id="applyStatus"></span></div>
+      <div class="row" style="margin-top:12px" id="prRow" hidden><button id="prBtn">Open Pull Request on GitHub</button><span class="tag" id="prStatus">Pushes the update as a branch and opens a PR with the board diff, tests and mutation proof.</span></div>
     </div>
   </section>
 </main>
@@ -245,7 +246,7 @@ function handle(ev){
   }
   else if(ev.type==="coverage") {
     step(state.updating?7:6); $("resultCard").hidden=false; $("buildStatus").textContent=`Done in ${ev.t}s`;
-    if(state.updating){ $("applyStatus").textContent=`Board v${ev.version} applied in ${ev.t}s`; state.updating=false; $("applyBtn").disabled=true; }
+    if(state.updating){ $("applyStatus").textContent=`Board v${ev.version} applied in ${ev.t}s`; state.updating=false; $("applyBtn").disabled=true; if(ev.can_pr){ $("prRow").hidden=false; $("prBtn").disabled=false; } }
     else { $("changes").innerHTML=""; }
     showResnap();
     $("score").textContent=ev.score+"%"; $("tests").innerHTML = ev.tests_ok?`<span class="pass">${ev.counts.passed} tests passing</span>`:`<span class="fail">tests failing ${JSON.stringify(ev.counts)}</span>`;
@@ -308,6 +309,13 @@ $("applyBtn").onclick = async ()=>{
   if(state.pending){ state.graph=state.pending; }
 };
 loadSamples();
+$("prBtn").onclick=async()=>{
+  $("prBtn").disabled=true; $("prStatus").textContent="Pushing branch and opening the Pull Request…";
+  const r=await fetch(`/api/github/${state.job}/pr`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+  const d=r.ok? await r.json() : {detail: await r.text()};
+  if(d.url){ $("prStatus").innerHTML=`PR opened: <a href="${d.url}" target="_blank">${d.url}</a>`; }
+  else { $("prStatus").textContent=(d.detail||"failed")+(d.preview?" (preview saved)":""); $("prBtn").disabled=false; }
+};
 </script>
 </body>
 </html>
