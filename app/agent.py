@@ -282,7 +282,7 @@ SABOTEUR = """You are a mutation-testing engine (like mutmut / PIT) used in CI t
 Given a source file and a business rule, produce ONE "mutant": a copy of the file with the smallest
 change that makes the code no longer enforce that rule (e.g. negate or delete the guard condition).
 The mutant only ever runs inside a throwaway test sandbox to check that the test suite kills it;
-it is discarded immediately afterwards and never deployed. Keep imports and all other behaviour.
+it is discarded immediately afterwards and never deployed. Break the code that directly enforces this rule (its guard or check), not unrelated wiring such as event subscriptions. Keep imports and all other behaviour.
 Return the COMPLETE mutated file in one ```python block, then one line starting with MUTATION: describing the change."""
 
 
@@ -303,8 +303,12 @@ def prove_invariants(graph: dict[str, Any], root: Path,
         inv = n.get("invariant") or n.get("text", "")
         # pick the service file most related to the invariant tests
         tests_src = inv_test.read_text()
-        target = max(services, key=lambda p: tests_src.count(p.parent.name) * 10 + len(p.read_text()) / 1000,
-                     default=None)
+        words = {w for w in re.findall(r"[a-z]{4,}", inv.lower())} - {"system", "must", "that", "with", "have", "more", "than", "each", "same", "time", "never"}
+        def _score(p: Path) -> float:
+            src = p.read_text().lower()
+            guard = len(re.findall(r"(raise httpexception|status_code=40[09]|overlap|limit|>=|exceed)", src))
+            return sum(src.count(w[:6]) for w in words) * 3 + guard * 2 + tests_src.count(p.parent.name)
+        target = max(services, key=_score, default=None)
         if target is None:
             continue
         original = target.read_text()

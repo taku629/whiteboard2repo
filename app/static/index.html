@@ -139,6 +139,8 @@ const $ = (id) => document.getElementById(id);
 const KINDS = ["client","gateway","service","worker","database","cache","queue","external"];
 const PROTOS = ["http","event","sql","cache","smtp","other"];
 let state = { sample:null, file:null, job:null, graph:null, sam:[], resnapSample:null, resnapFile:null, pending:null, updating:false };
+// resume an existing build: /#job=<id> opens the Re-snap step for that repo
+const _resume=(location.hash.match(/job=([0-9a-f]+)/)||[])[1]; if(_resume){ state.job=_resume; setTimeout(()=>{ document.getElementById('resnapCard').hidden=false; },0); }
 
 function step(n, cls){ for(let i=1;i<=6;i++){ const e=$("s"+i); if(i<n) e.className="step ok"; else if(i===n) e.className="step "+(cls||"on"); else e.className="step"; } }
 function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }

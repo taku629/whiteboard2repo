@@ -30,7 +30,7 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 
 API: `POST /api/resnap/{job_id}` (photo or sample) → diff + Mermaid; `POST /api/update/{job_id}` → SSE stream of the incremental update.
 
-Example run (paper_rooms sample, 2026-11-03): read 8.4 s → build 76 s → 17 tests passing, board coverage 100 %, "no double booking" mutant KILLED. Re-snap with paper_rooms_v2: diff = +Payments API, +edge "charge / REST", +rule "max 3 active bookings per user" → update 172 s → 24 tests passing, coverage 100 %, new rule's mutant KILLED. Times vary by run and endpoint load.
+Recorded demo run (paper_rooms sample, 2026-11-03): first build → 16 tests passing, board coverage 100 %, "no double booking" mutant KILLED. Re-snap with paper_rooms_v2: diff = +Payments API, +edge "charge / REST", +rule "max 3 active bookings per user" → update → 36 tests passing, coverage 100 %, new rule's mutant KILLED. Build takes about 1.5–4 minutes and an update about 3–4 minutes, depending on endpoint load. Test counts vary by run because the agent writes the tests. Times vary by run and endpoint load.
 
 ## Meta models used
 
