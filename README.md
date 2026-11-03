@@ -21,7 +21,7 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 2. **Confirm** – you see the boxes drawn over your photo, a Mermaid diagram, and an editable table. Fix anything the model misread before building.
 3. **Build** – a deterministic scaffolder emits a green skeleton (FastAPI per service, SQLAlchemy models, an event bus, `docker-compose.yml`, Dockerfile). Then a Muse Spark Open **tool-calling agent** (`list_files`, `read_file`, `write_file`, `run_tests`) implements every endpoint and edge and writes tests until `pytest` is green.
 4. **Prove the invariants** – for each invariant the model plays a mutation-testing engine: it injects the smallest change that would break that rule, the tests run, and the mutant must be **KILLED**. Then the code is restored. A rule only counts as covered when breaking it makes the tests fail.
-5. **Board coverage** – every box, arrow and note on the board is traced to the file / endpoint / test that implements it. Download the repo as a zip.
+5. **Board coverage** – every box, arrow and note on the board is checked against the generated repo: services need ≥2 endpoints, databases need SQLAlchemy models, event edges need publish + subscribe, notes need invariant tests. It is a structural check, not a semantic proof; the mutation step is the semantic check. Download the repo as a zip.
 6. **Re-snap** – the design changed? Photograph the board again. Muse Spark Open reads the new photo, `app/diff.py` diffs it against the board the repo was built from (components matched by id, label similarity and their connections, so a relabelled box keeps its code), and the diff is shown on the Mermaid diagram (green added / red removed / amber changed). **Apply update** runs the agent with only the diff: new services get a skeleton, removed ones are deleted, the agent wires new edges and writes tests for new rules while every existing test stays green, and only the **new** invariants go through the mutation proof. The run ends with a changed-files list; board history is kept as `graph.v1.json`, `graph.v2.json`, …
 
 ## Re-snap
@@ -30,14 +30,14 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 
 API: `POST /api/resnap/{job_id}` (photo or sample) → diff + Mermaid; `POST /api/update/{job_id}` → SSE stream of the incremental update.
 
-Example run (board_rooms sample): read in 8.9 s → build 78 s → 16 tests passing, board coverage 100 %, "no double booking" mutant KILLED.
+Example run (board_rooms sample, 2026-11-03): build 84 s → 13 tests passing, board coverage 100 %, "no double booking" mutant KILLED. Re-snap with board_rooms_v2: update 199 s → 18 tests passing, coverage 100 %, new "max 3 active bookings" mutant KILLED. Times vary by run and endpoint load.
 
 ## Meta models used
 
 | Model | Where | Why |
 |---|---|---|
-| **Muse Spark Open** (open weights) | `app/vision.py`, `app/agent.py` | One model for vision (sketch → graph + bboxes + notes), planning, multi-step tool calling, and adversarial mutation. Open weights means a team can self-host it next to their code. |
-| **SAM 3.1** (open weights) | `sam/sam31_regions.py` | Text-prompted segmentation ("rectangle box", "cylinder", "arrow", "handwritten text") gives pixel regions that ground the graph read. Run on a free Kaggle T4 GPU (~90 s for both boards); results are cached as `samples/*.sam.json` with overlays in `samples/*.sam.png`. Off-board hits (posters on the wall) are passed as hints only — Muse Spark Open decides what belongs to the diagram. |
+| **Muse Spark Open** (open weights) | `app/vision.py`, `app/agent.py` | One model for vision (sketch → graph + bboxes + notes), planning, multi-step tool calling, and adversarial mutation. Open weights means a team can self-host it next to their code (this demo calls it through a hosted endpoint, so photos are sent to that provider). |
+| **SAM 3.1** (open weights) | `sam/sam31_regions.py` | Text-prompted segmentation ("rectangle box", "cylinder", "arrow", "handwritten text") gives pixel regions that ground the graph read. Run on a free Kaggle T4 GPU (~90 s for both boards); results are cached as `samples/*.sam.json` with overlays in `samples/*.sam.png`. SAM runs offline (it needs a GPU), so in the app only the sample boards carry SAM regions; uploaded photos are read by Muse Spark Open alone, and the UI says which mode was used. Off-board hits (posters on the wall) are passed as hints only — Muse Spark Open decides what belongs to the diagram. |
 
 Muse Spark Open is called through any OpenAI-compatible endpoint (we used Nebius Token Factory). Nothing is hard-wired to one provider.
 

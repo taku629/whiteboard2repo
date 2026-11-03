@@ -299,7 +299,7 @@ def prove_invariants(graph: dict[str, Any], root: Path,
     if not inv_test.exists():
         return results
     services = [p for p in (root / "services").rglob("app.py")]
-    for n in (graph.get("notes", []) if notes is None else notes)[:3]:
+    for n in (graph.get("notes", []) if notes is None else notes)[:int(os.getenv("MAX_PROOFS", "8"))]:
         inv = n.get("invariant") or n.get("text", "")
         # pick the service file most related to the invariant tests
         tests_src = inv_test.read_text()

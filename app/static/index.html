@@ -211,7 +211,7 @@ $("analyzeBtn").onclick = async ()=>{
   try{
     const r=await fetch("/api/analyze",{method:"POST",body:fd}); if(!r.ok) throw new Error(await r.text());
     const d=await r.json(); state.job=d.job_id; state.graph=d.graph; state.sam=d.sam_regions||[];
-    $("status").textContent=`Read ${d.graph.components.length} components, ${d.graph.edges.length} arrows, ${(d.graph.notes||[]).length} notes in ${((performance.now()-t)/1000).toFixed(1)}s${d.graph.sam_grounded?" · grounded by SAM 3.1":""}`;
+    $("status").textContent=`Read ${d.graph.components.length} components, ${d.graph.edges.length} arrows, ${(d.graph.notes||[]).length} notes in ${((performance.now()-t)/1000).toFixed(1)}s${d.graph.sam_grounded?" · SAM 3.1 grounding: pre-computed regions":" · vision only (no SAM regions for uploads)"}`;
     renderGraph(); refreshDiagram(); step(2); $("buildBtn").disabled=false;
   }catch(e){ $("status").textContent="Error: "+e.message; step(1,"step"); }
   $("analyzeBtn").disabled=false;
