@@ -139,11 +139,22 @@ def open_pr(job: Path, owner_repo: str, token: str | None) -> dict[str, Any]:
         # publish the baseline only into an empty repo, never overwrite someone's main
         heads = gh.get(f"https://api.github.com/repos/{owner_repo}/branches").json()
         names = {b["name"] for b in heads} if isinstance(heads, list) else set()
-        if not names:
-            _git(repo, "push", "-q", remote, "main:main")
-            base = "main"
-        elif base not in names:
+        fresh = not names
+        if names and base in names:
+            # a just-created repo (one commit with only README/LICENSE/.gitignore) counts as empty
+            commits = gh.get(f"https://api.github.com/repos/{owner_repo}/commits", params={"per_page": 2}).json()
+            files = gh.get(f"https://api.github.com/repos/{owner_repo}/contents").json()
+            fresh = len(commits) == 1 and isinstance(files, list) and \
+                {f["name"].upper() for f in files} <= {"README.MD", "LICENSE", ".GITIGNORE"}
+        elif names:
             raise RuntimeError("target repo has no default branch")
+        published = _git(repo, "ls-remote", remote, "refs/tags/w2r-baseline-" + job.name, check=False)
+        if fresh and not published:
+            _git(repo, "push", "-q", "-f", remote, f"main:{base}")
+            _git(repo, "tag", "-f", "w2r-baseline-" + job.name, "main")
+            _git(repo, "push", "-q", remote, "w2r-baseline-" + job.name)
+        elif not published:
+            raise RuntimeError("target repo already has other history - use a dedicated, empty repo")
         _git(repo, "push", "-q", "-f", remote, f"{branch}:{branch}")
         r = gh.post(f"https://api.github.com/repos/{owner_repo}/pulls",
                     json={"title": f"Re-snap: board v{v-1} → v{v} ({', '.join(report.get('summary', [])[:2])[:120]})",
