@@ -1,0 +1,219 @@
+{
+ "model": "SAM 3.1",
+ "image_size": [
+  1408,
+  768
+ ],
+ "regions": [
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    159,
+    464,
+    183,
+    496
+   ],
+   "score": 0.392
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    104,
+    498,
+    131,
+    531
+   ],
+   "score": 0.413
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    132,
+    463,
+    157,
+    494
+   ],
+   "score": 0.394
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    131,
+    430,
+    158,
+    463
+   ],
+   "score": 0.396
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    103,
+    429,
+    131,
+    462
+   ],
+   "score": 0.411
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    104,
+    534,
+    131,
+    587
+   ],
+   "score": 0.417
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    158,
+    428,
+    183,
+    462
+   ],
+   "score": 0.375
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    572,
+    360,
+    663,
+    475
+   ],
+   "score": 0.732
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    133,
+    497,
+    158,
+    529
+   ],
+   "score": 0.396
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    159,
+    497,
+    184,
+    531
+   ],
+   "score": 0.402
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    104,
+    464,
+    131,
+    496
+   ],
+   "score": 0.41
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    237,
+    345,
+    333,
+    499
+   ],
+   "score": 0.574
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    405,
+    345,
+    510,
+    491
+   ],
+   "score": 0.708
+  },
+  {
+   "prompt": "rectangle box",
+   "bbox": [
+    132,
+    557,
+    158,
+    588
+   ],
+   "score": 0.352
+  },
+  {
+   "prompt": "cylinder",
+   "bbox": [
+    414,
+    604,
+    507,
+    784
+   ],
+   "score": 0.798
+  },
+  {
+   "prompt": "cloud shape",
+   "bbox": [
+    11,
+    312,
+    57,
+    354
+   ],
+   "score": 0.391
+  },
+  {
+   "prompt": "cloud shape",
+   "bbox": [
+    689,
+    349,
+    773,
+    478
+   ],
+   "score": 0.723
+  },
+  {
+   "prompt": "arrow",
+   "bbox": [
+    662,
+    406,
+    691,
+    430
+   ],
+   "score": 0.864
+  },
+  {
+   "prompt": "arrow",
+   "bbox": [
+    330,
+    404,
+    406,
+    433
+   ],
+   "score": 0.891
+  },
+  {
+   "prompt": "arrow",
+   "bbox": [
+    450,
+    486,
+    464,
+    607
+   ],
+   "score": 0.902
+  },
+  {
+   "prompt": "arrow",
+   "bbox": [
+    510,
+    403,
+    573,
+    429
+   ],
+   "score": 0.896
+  }
+ ]
+}

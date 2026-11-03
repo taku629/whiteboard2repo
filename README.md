@@ -7,6 +7,10 @@ Built for the Meta Global AI Developer Hackathon (Nov 2026) · Track: Build for 
 ![Read the board](media/01_read.png)
 ![Built and proven](media/02_built.png)
 
+SAM 3.1 regions on the sample board (boxes, cylinder, cloud, arrows):
+
+![SAM 3.1](samples/board_rooms.sam.png)
+
 ## The problem
 
 Every system starts as boxes and arrows on a whiteboard. Then someone takes a phone photo, it rots in a chat thread, and a day later an engineer re-types the same design into boilerplate by hand: services, a database, a queue, a compose file, tests. The constraints people wrote in the corner ("no double booking!") are the first thing to get lost.
@@ -26,7 +30,7 @@ Example run (board_rooms sample): read in 8.9 s → build 78 s → 16 tests pass
 | Model | Where | Why |
 |---|---|---|
 | **Muse Spark Open** (open weights) | `app/vision.py`, `app/agent.py` | One model for vision (sketch → graph + bboxes + notes), planning, multi-step tool calling, and adversarial mutation. Open weights means a team can self-host it next to their code. |
-| **SAM 3.1** (open weights) | `sam/sam31_regions.py` | Text-prompted segmentation ("rectangle box", "cylinder", "arrow", "handwritten text") gives pixel regions that ground the graph read. Run offline on a free GPU; results are cached as `samples/*.sam.json`. |
+| **SAM 3.1** (open weights) | `sam/sam31_regions.py` | Text-prompted segmentation ("rectangle box", "cylinder", "arrow", "handwritten text") gives pixel regions that ground the graph read. Run on a free Kaggle T4 GPU (~90 s for both boards); results are cached as `samples/*.sam.json` with overlays in `samples/*.sam.png`. Off-board hits (posters on the wall) are passed as hints only — Muse Spark Open decides what belongs to the diagram. |
 
 Muse Spark Open is called through any OpenAI-compatible endpoint (we used Nebius Token Factory). Nothing is hard-wired to one provider.
 
