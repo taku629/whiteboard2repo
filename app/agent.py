@@ -107,11 +107,17 @@ class Workspace:
 def run(graph: dict[str, Any], root: Path) -> Iterator[dict[str, Any]]:
     """Run the agent loop, yielding progress events for the UI."""
     ws = Workspace(root)
+    intro = ("board.json:\n" + json.dumps(graph, ensure_ascii=False)
+             + "\n\nCurrent files:\n" + ws.list_files()
+             + "\n\nStart by reading the service skeletons you need, then implement.")
+    yield from _loop(SYSTEM, intro, root)
+
+
+def _loop(system: str, intro: str, root: Path) -> Iterator[dict[str, Any]]:
+    ws = Workspace(root)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": "board.json:\n" + json.dumps(graph, ensure_ascii=False)
-         + "\n\nCurrent files:\n" + ws.list_files()
-         + "\n\nStart by reading the service skeletons you need, then implement."},
+        {"role": "system", "content": system},
+        {"role": "user", "content": intro},
     ]
     last_ok = False
     nudged = False
@@ -176,6 +182,61 @@ def run(graph: dict[str, Any], root: Path) -> Iterator[dict[str, Any]]:
     yield {"type": "done", "step": MAX_STEPS, "summary": "Step budget reached.", "ok": ok, "counts": counts}
 
 
+UPDATE_SYSTEM = SYSTEM.split("Requirements:")[0] + """The team has since changed the whiteboard and
+photographed it again. The repo you see is the EXISTING, already working implementation of the old board
+(its tests pass). board.json has been updated to the new board and new skeletons were generated for new
+components. You receive the exact DIFF between the old and the new board.
+
+Rules for this update:
+1. Change only what the diff requires. Do not rewrite files the diff does not touch; read before you write.
+2. Every existing test that still describes the new board must keep passing. Tests for removed
+   components/edges/invariants may be deleted or adapted - nothing else.
+3. Added components: implement them like the rest of the repo (2-4 endpoints, SQLAlchemy via common.db).
+   An added external system (payments, email, ...) becomes a small client module with a fake/in-memory
+   implementation used in tests - no network.
+4. Added edges: wire them (http via a client function using fastapi.testclient.TestClient in-process;
+   event via common.bus.bus.publish / bus.subscribe) and add one test per new edge to tests/test_flows.py.
+5. Added invariants: add at least one test per new invariant to tests/test_invariants.py that would FAIL
+   if the rule were violated, and make the code enforce it.
+6. Tests must not need network, Docker, Postgres or Redis. Run tests, fix, repeat; call finish when green.
+Work efficiently: write whole files, then run_tests."""
+
+
+def _snapshot(root: Path) -> dict[str, str]:
+    return {str(p.relative_to(root)): p.read_text(errors="replace") for p in root.rglob("*")
+            if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts}
+
+
+def update(old_graph: dict[str, Any], new_graph: dict[str, Any], root: Path,
+           d: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
+    """Re-snap: apply the diff between two boards to an existing repo.
+
+    Yields the same event shapes as `run`, then a `changes` event listing the
+    files that differ from before the update.
+    """
+    from . import diff as diffmod
+    from . import scaffold
+
+    d = d or diffmod.diff_graphs(old_graph, new_graph)
+    graph = d["aligned"]
+    before = _snapshot(root)
+    sk = scaffold.apply_diff(graph, root, d)
+    yield {"type": "scaffold_diff", "written": sk["written"], "deleted": sk["deleted"],
+           "diff": diffmod.summary_lines(d)}
+    if not d["empty"]:
+        ws = Workspace(root)
+        intro = ("DIFF (old board -> new board):\n" + "\n".join(diffmod.summary_lines(d))
+                 + "\n\nNew board.json:\n" + json.dumps(graph, ensure_ascii=False)
+                 + "\n\nCurrent files:\n" + ws.list_files()
+                 + "\n\nRead the files the diff touches, then apply the change.")
+        yield from _loop(UPDATE_SYSTEM, intro, root)
+    after = _snapshot(root)
+    changed = sorted(k for k in after if before.get(k) != after[k])
+    removed = sorted(k for k in before if k not in after)
+    yield {"type": "changes", "added": [k for k in changed if k not in before],
+           "modified": [k for k in changed if k in before], "deleted": removed}
+
+
 def coverage(graph: dict[str, Any], root: Path) -> dict[str, Any]:
     """Step 4 - check the generated repo against the board, item by item."""
     code = {str(p.relative_to(root)): p.read_text() for p in root.rglob("*.py")
@@ -225,7 +286,8 @@ it is discarded immediately afterwards and never deployed. Keep imports and all 
 Return the COMPLETE mutated file in one ```python block, then one line starting with MUTATION: describing the change."""
 
 
-def prove_invariants(graph: dict[str, Any], root: Path) -> list[dict[str, Any]]:
+def prove_invariants(graph: dict[str, Any], root: Path,
+                     notes: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Mutation check: does each invariant test actually catch a violation?
 
     Muse Spark Open plays saboteur and breaks the implementation on purpose; the
@@ -237,7 +299,7 @@ def prove_invariants(graph: dict[str, Any], root: Path) -> list[dict[str, Any]]:
     if not inv_test.exists():
         return results
     services = [p for p in (root / "services").rglob("app.py")]
-    for n in graph.get("notes", [])[:3]:
+    for n in (graph.get("notes", []) if notes is None else notes)[:3]:
         inv = n.get("invariant") or n.get("text", "")
         # pick the service file most related to the invariant tests
         tests_src = inv_test.read_text()

@@ -22,6 +22,13 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 3. **Build** – a deterministic scaffolder emits a green skeleton (FastAPI per service, SQLAlchemy models, an event bus, `docker-compose.yml`, Dockerfile). Then a Muse Spark Open **tool-calling agent** (`list_files`, `read_file`, `write_file`, `run_tests`) implements every endpoint and edge and writes tests until `pytest` is green.
 4. **Prove the invariants** – for each invariant the model plays a mutation-testing engine: it injects the smallest change that would break that rule, the tests run, and the mutant must be **KILLED**. Then the code is restored. A rule only counts as covered when breaking it makes the tests fail.
 5. **Board coverage** – every box, arrow and note on the board is traced to the file / endpoint / test that implements it. Download the repo as a zip.
+6. **Re-snap** – the design changed? Photograph the board again. Muse Spark Open reads the new photo, `app/diff.py` diffs it against the board the repo was built from (components matched by id, label similarity and their connections, so a relabelled box keeps its code), and the diff is shown on the Mermaid diagram (green added / red removed / amber changed). **Apply update** runs the agent with only the diff: new services get a skeleton, removed ones are deleted, the agent wires new edges and writes tests for new rules while every existing test stays green, and only the **new** invariants go through the mutation proof. The run ends with a changed-files list; board history is kept as `graph.v1.json`, `graph.v2.json`, …
+
+## Re-snap
+
+`samples/board_rooms_v2.jpg` is the same board after the team added a **Payments API** and the rule **"max 3 active bookings per user!"** (also an AI-generated test image). Build `board_rooms` first, then pick the updated sample under *Re-snap*.
+
+API: `POST /api/resnap/{job_id}` (photo or sample) → diff + Mermaid; `POST /api/update/{job_id}` → SSE stream of the incremental update.
 
 Example run (board_rooms sample): read in 8.9 s → build 78 s → 16 tests passing, board coverage 100 %, "no double booking" mutant KILLED.
 
@@ -53,7 +60,8 @@ Offline tests (no model needed): `pytest tests`.
 app/llm.py        OpenAI-compatible client for Muse Spark Open (vision + tools)
 app/vision.py     photo -> graph JSON (components, edges, notes -> invariants), Mermaid
 app/scaffold.py   deterministic, always-green skeleton generator
-app/agent.py      tool-calling build loop, mutation proof, board coverage
+app/agent.py      tool-calling build loop, re-snap update loop, mutation proof, board coverage
+app/diff.py       re-snap: board-to-board diff, id alignment, diff Mermaid
 app/main.py       FastAPI + SSE progress stream
 app/static/       single-page UI
 sam/              SAM 3.1 region extraction script (GPU or >=8 GB CPU)

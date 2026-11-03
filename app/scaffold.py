@@ -184,3 +184,59 @@ def build(graph: dict[str, Any], root: Path) -> list[str]:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
     return sorted(files)
+
+
+def apply_diff(graph: dict[str, Any], root: Path, d: dict[str, Any]) -> dict[str, list[str]]:
+    """Re-snap: update the skeleton in place for added/removed components.
+
+    Existing service code is never overwritten; only new services get a fresh
+    skeleton, removed services are deleted, and the board-level files
+    (docker-compose.yml, board.json, ARCHITECTURE.md) are regenerated.
+    """
+    import shutil
+
+    written: list[str] = []
+    deleted: list[str] = []
+    for c in d["components"]["added"]:
+        if c["kind"] not in CODE_KINDS or (root / "services" / c["id"] / "app.py").exists():
+            continue
+        files = {
+            f"services/{c['id']}/__init__.py": "",
+            f"services/{c['id']}/app.py": _service_app(c, graph),
+            f"tests/test_{c['id']}_health.py": textwrap.dedent(f'''\
+                from fastapi.testclient import TestClient
+
+                from services.{c['id']}.app import app
+
+
+                def test_health():
+                    r = TestClient(app).get("/health")
+                    assert r.status_code == 200
+                    assert r.json()["service"] == "{c['id']}"
+                '''),
+        }
+        for rel, content in files.items():
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+            written.append(rel)
+    for c in d["components"]["removed"]:
+        sdir = root / "services" / c["id"]
+        if sdir.exists():
+            shutil.rmtree(sdir)
+            deleted.append(f"services/{c['id']}/")
+        for t in root.glob(f"tests/test_{c['id']}_*.py"):
+            t.unlink()
+            deleted.append(str(t.relative_to(root)))
+    inv = "\n".join(f"- {n.get('invariant') or n.get('text')}" for n in graph.get("notes", [])) or "- (none)"
+    board = {
+        "docker-compose.yml": _compose(graph),
+        "board.json": json.dumps(graph, indent=2, ensure_ascii=False),
+        "ARCHITECTURE.md": (f"# {graph['title']}\n\nGenerated from a whiteboard photo by Whiteboard2Repo "
+                            f"(Meta Muse Spark Open{' + SAM 3.1' if graph.get('sam_grounded') else ''}).\n\n"
+                            f"```mermaid\n{to_mermaid(graph)}\n```\n\n## Invariants from the board\n{inv}\n"),
+    }
+    for rel, content in board.items():
+        (root / rel).write_text(content)
+        written.append(rel)
+    return {"written": written, "deleted": deleted}

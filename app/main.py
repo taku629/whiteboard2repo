@@ -18,7 +18,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+import re
+
 from . import agent, llm, scaffold, vision
+from . import diff as diffmod
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent
@@ -69,7 +72,9 @@ def health() -> dict:
 def samples() -> list[dict[str, Any]]:
     out = []
     for p in sorted(SAMPLES.glob("*.jpg")):
+        m = re.match(r"(.+)_v(\d+)$", p.stem)
         out.append({"name": p.stem, "image": f"/samples/{p.name}",
+                    "update_of": m.group(1) if m else None,
                     "sam": (SAMPLES / f"{p.stem}.sam.json").exists(),
                     "sam_overlay": f"/samples/{p.stem}.sam.png" if (SAMPLES / f"{p.stem}.sam.png").exists() else None})
     return out
@@ -120,6 +125,10 @@ async def build(job_id: str, request: Request) -> StreamingResponse:
     repo = d / "repo"
     if repo.exists():
         shutil.rmtree(repo)
+    # the graph the repo was built from (after user edits) is version 1 of the board history
+    (d / "built.json").write_text(json.dumps(graph))
+    (d / "graph.v1.json").write_text(json.dumps(graph))
+    (d / "version").write_text("1")
 
     def stream():
         def sse(ev: dict) -> str:
@@ -144,6 +153,93 @@ async def build(job_id: str, request: Request) -> StreamingResponse:
         cov["t"] = round(time.time() - t0, 1)
         (d / "coverage.json").write_text(json.dumps(cov))
         yield sse({"type": "coverage", **cov, "files": agent.Workspace(repo).list_files().splitlines(),
+                   "download": f"/api/download/{job_id}"})
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _read_upload_or_sample(data: bytes | None, sample: str | None, use_cache: bool) -> dict[str, Any]:
+    if sample:
+        src = SAMPLES / f"{Path(sample).name}.jpg"
+        if not src.exists():
+            raise HTTPException(404, "unknown sample")
+        cached = SAMPLES / f"{src.stem}.graph.json"
+        if use_cache and cached.exists():
+            return json.loads(cached.read_text())
+        sam_file = SAMPLES / f"{src.stem}.sam.json"
+        hints = json.loads(sam_file.read_text()).get("regions") if sam_file.exists() else None
+        return vision.read_board(src.read_bytes(), hints)
+    if not data:
+        raise HTTPException(400, "upload an image or pick a sample")
+    if len(data) > 8_000_000:
+        raise HTTPException(413, "image too large (8 MB max)")
+    return vision.read_board(data)
+
+
+@app.post("/api/resnap/{job_id}")
+async def resnap(job_id: str, file: UploadFile | None = File(None), sample: str | None = Form(None),
+                 use_cache: bool = Form(False)) -> JSONResponse:
+    """Read an updated photo of the same whiteboard and diff it against the built board."""
+    d = _job(job_id)
+    if not (d / "built.json").exists():
+        raise HTTPException(409, "build the first version before re-snapping")
+    old = json.loads((d / "built.json").read_text())
+    data = await file.read() if file is not None else None
+    new = _read_upload_or_sample(data, sample, use_cache)
+    df = diffmod.diff_graphs(old, new)
+    (d / "pending.json").write_text(json.dumps(df["aligned"]))
+    return JSONResponse({"job_id": job_id, "graph": df["aligned"], "diff": {k: df[k] for k in
+                         ("components", "edges", "invariants", "empty", "count")},
+                         "summary": diffmod.summary_lines(df),
+                         "mermaid": diffmod.to_mermaid_diff(old, df)})
+
+
+@app.post("/api/update/{job_id}")
+async def update(job_id: str, request: Request) -> StreamingResponse:
+    """Apply the re-snapped board to the existing repo (SSE stream like /api/build)."""
+    d = _job(job_id)
+    repo = d / "repo"
+    if not repo.exists() or not (d / "built.json").exists():
+        raise HTTPException(409, "nothing built yet")
+    body = await request.json()
+    old = json.loads((d / "built.json").read_text())
+    pending = body.get("graph") or json.loads((d / "pending.json").read_text())
+    new = vision.normalize_graph(pending)
+    for k in ("image_size", "model", "sam_grounded"):
+        new[k] = pending.get(k)
+    df = diffmod.diff_graphs(old, new)
+    graph = df["aligned"]
+    if not _rate_ok():
+        raise HTTPException(429, "demo build limit reached for this hour - try again later")
+
+    def stream():
+        def sse(ev: dict) -> str:
+            return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        t0 = time.time()
+        try:
+            for ev in agent.update(old, new, repo, df):
+                ev["t"] = round(time.time() - t0, 1)
+                yield sse(ev)
+        except Exception as e:  # pragma: no cover
+            yield sse({"type": "error", "text": str(e)[:500]})
+        new_notes = df["invariants"]["added"]
+        if new_notes:
+            yield sse({"type": "proving", "t": round(time.time() - t0, 1)})
+            try:
+                proofs = agent.prove_invariants(graph, repo, new_notes)
+            except Exception as e:  # pragma: no cover
+                proofs = [{"invariant": "-", "caught": None, "detail": str(e)[:200]}]
+            yield sse({"type": "proof", "results": proofs, "t": round(time.time() - t0, 1)})
+        cov = agent.coverage(graph, repo)
+        cov["t"] = round(time.time() - t0, 1)
+        v = int((d / "version").read_text() or "1") + 1
+        (d / f"graph.v{v}.json").write_text(json.dumps(graph))
+        (d / "version").write_text(str(v))
+        (d / "built.json").write_text(json.dumps(graph))
+        (d / "coverage.json").write_text(json.dumps(cov))
+        yield sse({"type": "coverage", **cov, "version": v,
+                   "files": agent.Workspace(repo).list_files().splitlines(),
                    "download": f"/api/download/{job_id}"})
 
     return StreamingResponse(stream(), media_type="text/event-stream",
