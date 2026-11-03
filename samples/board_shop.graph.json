@@ -1,0 +1,123 @@
+{
+ "title": "Mobile App Orders and Payments Flow",
+ "components": [
+  {
+   "id": "mobile_app",
+   "label": "Mobile App",
+   "kind": "client",
+   "bbox": [
+    125,
+    365,
+    285,
+    565
+   ],
+   "responsibility": "Mobile client initiating API requests"
+  },
+  {
+   "id": "api_gateway",
+   "label": "API Gateway",
+   "kind": "gateway",
+   "bbox": [
+    325,
+    370,
+    465,
+    545
+   ],
+   "responsibility": "Routes client requests to backend services"
+  },
+  {
+   "id": "orders_service",
+   "label": "Orders Service",
+   "kind": "service",
+   "bbox": [
+    515,
+    405,
+    645,
+    555
+   ],
+   "responsibility": "Creates and manages orders"
+  },
+  {
+   "id": "payments_service",
+   "label": "Payments Service",
+   "kind": "service",
+   "bbox": [
+    765,
+    405,
+    865,
+    555
+   ],
+   "responsibility": "Processes payments for orders"
+  },
+  {
+   "id": "postgres",
+   "label": "Postgres",
+   "kind": "database",
+   "bbox": [
+    505,
+    705,
+    615,
+    865
+   ],
+   "responsibility": "Persistent storage for orders data"
+  },
+  {
+   "id": "redis_queue",
+   "label": "Redis queue",
+   "kind": "queue",
+   "bbox": [
+    655,
+    625,
+    765,
+    775
+   ],
+   "responsibility": "Message queue for order events"
+  }
+ ],
+ "edges": [
+  {
+   "from": "mobile_app",
+   "to": "api_gateway",
+   "label": "",
+   "protocol": "http"
+  },
+  {
+   "from": "api_gateway",
+   "to": "orders_service",
+   "label": "",
+   "protocol": "http"
+  },
+  {
+   "from": "api_gateway",
+   "to": "payments_service",
+   "label": "",
+   "protocol": "http"
+  },
+  {
+   "from": "orders_service",
+   "to": "postgres",
+   "label": "orders",
+   "protocol": "sql"
+  },
+  {
+   "from": "orders_service",
+   "to": "redis_queue",
+   "label": "order.created",
+   "protocol": "event"
+  },
+  {
+   "from": "redis_queue",
+   "to": "payments_service",
+   "label": "",
+   "protocol": "event"
+  }
+ ],
+ "notes": [],
+ "questions": [],
+ "image_size": [
+  1408,
+  768
+ ],
+ "model": "meta-models/muse-spark-open",
+ "sam_grounded": false
+}

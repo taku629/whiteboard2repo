@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whiteboard2Repo — from marker sketch to tested code</title>
+<style>
+  :root { --ink:#1b2430; --muted:#6b7684; --line:#e3e7ec; --blue:#1f5fd6; --red:#d23b3b; --green:#1a8f55; --bg:#f7f8fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  header { padding:22px 28px 10px; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:26px; margin:0; letter-spacing:-.3px; }
+  h1 span { color:var(--blue); }
+  .tag { color:var(--muted); }
+  main { display:grid; grid-template-columns: minmax(380px, 1.1fr) minmax(380px, 1fr); gap:18px; padding:10px 28px 40px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 10px; }
+  .steps { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .step { padding:4px 10px; border-radius:99px; background:#eef1f5; color:var(--muted); font-size:13px; }
+  .step.on { background:var(--blue); color:#fff; }
+  .step.ok { background:var(--green); color:#fff; }
+  #boardWrap { position:relative; width:100%; }
+  #boardImg { width:100%; display:block; border-radius:8px; }
+  #overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; border:0; border-radius:8px; padding:9px 14px; cursor:pointer; background:var(--ink); color:#fff; }
+  button.secondary { background:#eef1f5; color:var(--ink); }
+  button:disabled { opacity:.45; cursor:default; }
+  .samples img { height:64px; border-radius:6px; cursor:pointer; border:2px solid transparent; }
+  .samples img.sel { border-color:var(--blue); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td input, td select { width:100%; font:inherit; border:1px solid transparent; padding:2px 4px; border-radius:4px; background:transparent; }
+  td input:focus, td select:focus { border-color:var(--line); background:#fff; outline:none; }
+  .kind { font-size:12px; padding:1px 6px; border-radius:4px; background:#eef1f5; }
+  .note { color:var(--red); }
+  .q { background:#fff7e6; border:1px solid #ffe2a8; padding:6px 10px; border-radius:6px; margin:4px 0; font-size:14px; }
+  #log { font:13px/1.45 ui-monospace, Menlo, monospace; background:#0f1620; color:#d7e1ea; border-radius:8px; padding:12px; height:300px; overflow:auto; white-space:pre-wrap; }
+  #log .t { color:#6f8296; } #log .ok { color:#5fd38d; } #log .bad { color:#ff7a7a; } #log .th { color:#9ec1ff; }
+  .cov li { list-style:none; margin:3px 0; } .cov { padding:0; margin:0; }
+  .pass { color:var(--green); font-weight:600; } .fail { color:var(--red); font-weight:600; }
+  .big { font-size:34px; font-weight:700; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  #files a { display:block; color:var(--blue); text-decoration:none; font:13px ui-monospace, Menlo, monospace; cursor:pointer; }
+  #code { font:12px/1.45 ui-monospace, Menlo, monospace; background:#f3f5f8; padding:10px; border-radius:8px; max-height:340px; overflow:auto; white-space:pre; }
+  .mermaid { background:#fff; }
+  footer { color:var(--muted); font-size:13px; padding:0 28px 30px; }
+  @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Whiteboard<span>2</span>Repo</h1>
+  <div class="tag">Snap the whiteboard after the design meeting. Get a running, tested repo before everyone has left the room.</div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <div class="steps">
+        <div class="step" id="s1">1 · Read board</div>
+        <div class="step" id="s2">2 · Confirm graph</div>
+        <div class="step" id="s3">3 · Agent builds &amp; tests</div>
+        <div class="step" id="s4">4 · Prove invariants</div>
+        <div class="step" id="s5">5 · Board coverage</div>
+      </div>
+      <div class="row samples" id="samples"></div>
+      <div class="row" style="margin:10px 0">
+        <label class="secondary" style="padding:8px 12px;border-radius:8px;background:#eef1f5;cursor:pointer">
+          Upload a photo <input type="file" id="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <button id="analyzeBtn" disabled>Read the board</button>
+        <span id="status" class="tag"></span>
+      </div>
+      <div id="boardWrap"><img id="boardImg" alt=""><canvas id="overlay"></canvas></div>
+      <div class="row tag" style="margin-top:6px;font-size:13px">
+        <span style="color:var(--blue)">■ components</span><span style="color:#8a5cf6">■ arrows</span>
+        <span style="color:var(--red)">■ handwritten notes → invariants</span><span style="color:var(--green)">┅ SAM 3.1 regions</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h2>Architecture read from the board (Mermaid)</h2>
+      <div id="mermaid" class="mermaid tag">Pick a sample or upload a photo.</div>
+    </div>
+  </section>
+  <section>
+    <div class="card" id="graphCard">
+      <h2>Confirm what the model saw — edit anything before building</h2>
+      <div id="questions"></div>
+      <table id="comps"><thead><tr><th>Component</th><th>Kind</th><th>Responsibility</th></tr></thead><tbody></tbody></table>
+      <table id="edges" style="margin-top:10px"><thead><tr><th>From</th><th>To</th><th>Label</th><th>Protocol</th></tr></thead><tbody></tbody></table>
+      <div id="notes" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:12px"><button id="buildBtn" disabled>Build the repo</button><span class="tag" id="buildStatus"></span></div>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h2>Agent log · Muse Spark Open tool calls</h2>
+      <div id="log"></div>
+    </div>
+    <div class="card" style="margin-top:18px" id="resultCard" hidden>
+      <div class="grid2">
+        <div><h2>Board coverage</h2><div class="big" id="score">–</div><div id="tests"></div></div>
+        <div><h2>Invariant proof (mutation test)</h2><div id="proof" class="tag">–</div></div>
+      </div>
+      <ul class="cov" id="cov" style="margin-top:10px"></ul>
+      <div class="row" style="margin-top:10px"><a id="dl"><button>Download repo (.zip)</button></a></div>
+      <div class="grid2" style="margin-top:12px"><div id="files"></div><div id="code">Click a file to view it.</div></div>
+    </div>
+  </section>
+</main>
+<footer>Models: Meta <b>Muse Spark Open</b> (open weights) for vision, planning, tool-calling build agent and mutation testing · Meta <b>SAM 3.1</b> for region grounding. Generated code runs in an isolated sandbox per job. Source: github.com/taku629/whiteboard2repo</footer>
+
+<script type="module">
+let mermaid = null;
+import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")
+  .then(m => { mermaid = m.default; mermaid.initialize({ startOnLoad:false, theme:"neutral" }); if (state.graph) refreshDiagram(); })
+  .catch(() => {});
+const $ = (id) => document.getElementById(id);
+const KINDS = ["client","gateway","service","worker","database","cache","queue","external"];
+const PROTOS = ["http","event","sql","cache","smtp","other"];
+let state = { sample:null, file:null, job:null, graph:null, sam:[] };
+
+function step(n, cls){ for(let i=1;i<=5;i++){ const e=$("s"+i); if(i<n) e.className="step ok"; else if(i===n) e.className="step "+(cls||"on"); else e.className="step"; } }
+function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function loadSamples(){
+  const list = await (await fetch("/api/samples")).json();
+  $("samples").innerHTML = "<span class='tag'>Samples:</span>" + list.map(s=>`<img src="${s.image}" data-name="${s.name}" title="${s.name}">`).join("");
+  $("samples").querySelectorAll("img").forEach(img=>img.onclick=()=>{
+    $("samples").querySelectorAll("img").forEach(i=>i.classList.remove("sel")); img.classList.add("sel");
+    state.sample = img.dataset.name; state.file=null; $("boardImg").src = img.src; clearOverlay(); $("analyzeBtn").disabled=false;
+  });
+}
+$("file").onchange = (e)=>{ const f=e.target.files[0]; if(!f) return; state.file=f; state.sample=null; $("boardImg").src=URL.createObjectURL(f); clearOverlay(); $("analyzeBtn").disabled=false; };
+
+function clearOverlay(){ const c=$("overlay"); c.getContext("2d").clearRect(0,0,c.width,c.height); }
+function drawOverlay(){
+  const img=$("boardImg"), c=$("overlay"); const W=img.naturalWidth, H=img.naturalHeight; if(!W) return;
+  c.width=W; c.height=H; const g=c.getContext("2d"); g.clearRect(0,0,W,H);
+  const box=(b)=>[b[0]/1000*W, b[1]/1000*H, (b[2]-b[0])/1000*W, (b[3]-b[1])/1000*H];
+  g.lineWidth=Math.max(3,W/350); g.font=`${Math.max(16,W/60)}px sans-serif`;
+  for(const r of state.sam||[]){ if(!r.bbox) continue; g.setLineDash([10,8]); g.strokeStyle="#1a8f55"; g.strokeRect(...box(r.bbox)); }
+  g.setLineDash([]);
+  const centers={};
+  for(const c2 of state.graph.components){ if(!c2.bbox) continue; const [x,y,w,h]=box(c2.bbox); centers[c2.id]=[x+w/2,y+h/2];
+    g.strokeStyle="#1f5fd6"; g.strokeRect(x,y,w,h); g.fillStyle="rgba(31,95,214,.85)"; const t=c2.kind; const tw=g.measureText(t).width+10; g.fillRect(x,y-26,tw,24); g.fillStyle="#fff"; g.fillText(t,x+5,y-8); }
+  g.strokeStyle="#8a5cf6"; g.fillStyle="#8a5cf6";
+  for(const e of state.graph.edges){ const a=centers[e.from], b=centers[e.to]; if(!a||!b) continue;
+    g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.globalAlpha=.55; g.stroke(); g.globalAlpha=1;
+    const ang=Math.atan2(b[1]-a[1],b[0]-a[0]); const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2; const L=W/70;
+    g.beginPath(); g.moveTo(mx,my); g.lineTo(mx-L*Math.cos(ang-0.4), my-L*Math.sin(ang-0.4)); g.lineTo(mx-L*Math.cos(ang+0.4), my-L*Math.sin(ang+0.4)); g.fill(); }
+  for(const n of state.graph.notes||[]){ if(!n.bbox) continue; g.strokeStyle="#d23b3b"; g.strokeRect(...box(n.bbox)); }
+}
+$("boardImg").onload = ()=>{ if(state.graph) drawOverlay(); };
+
+async function renderMermaid(src){
+  if(!mermaid){ $("mermaid").innerHTML = "<pre style='white-space:pre-wrap'>"+esc(src)+"</pre>"; return; }
+  try { const {svg} = await mermaid.render("m"+Date.now(), src); $("mermaid").innerHTML = svg; } catch(e) { $("mermaid").innerHTML = "<pre>"+esc(src)+"</pre>"; }
+}
+
+function renderGraph(){
+  const g=state.graph;
+  $("questions").innerHTML = (g.questions||[]).map(q=>`<div class="q">❓ ${esc(q)}</div>`).join("");
+  $("comps").querySelector("tbody").innerHTML = g.components.map((c,i)=>`<tr>
+    <td><input data-i="${i}" data-f="label" value="${esc(c.label)}"></td>
+    <td><select data-i="${i}" data-f="kind">${KINDS.map(k=>`<option ${k===c.kind?"selected":""}>${k}</option>`).join("")}</select></td>
+    <td><input data-i="${i}" data-f="responsibility" value="${esc(c.responsibility)}"></td></tr>`).join("");
+  const ids=g.components.map(c=>c.id);
+  $("edges").querySelector("tbody").innerHTML = g.edges.map((e,i)=>`<tr>
+    <td>${esc(e.from)}</td><td>${esc(e.to)}</td>
+    <td><input data-e="${i}" data-f="label" value="${esc(e.label)}"></td>
+    <td><select data-e="${i}" data-f="protocol">${PROTOS.map(k=>`<option ${k===e.protocol?"selected":""}>${k}</option>`).join("")}</select></td></tr>`).join("");
+  $("notes").innerHTML = (g.notes||[]).map((n,i)=>`<div class="note">✍︎ “${esc(n.text)}” → <input data-n="${i}" value="${esc(n.invariant)}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:3px 6px"></div>`).join("");
+  document.querySelectorAll("#comps [data-i]").forEach(el=>el.onchange=()=>{ g.components[+el.dataset.i][el.dataset.f]=el.value; refreshDiagram(); });
+  document.querySelectorAll("#edges [data-e]").forEach(el=>el.onchange=()=>{ g.edges[+el.dataset.e][el.dataset.f]=el.value; refreshDiagram(); });
+  document.querySelectorAll("#notes [data-n]").forEach(el=>el.onchange=()=>{ g.notes[+el.dataset.n].invariant=el.value; });
+}
+function mermaidOf(g){
+  const sh={database:['[(',')]'],queue:['[/','/]'],external:['((','))'],client:['([','])'],cache:['[(',')]']};
+  let s="flowchart LR\n"; for(const c of g.components){ const [l,r]=sh[c.kind]||['[',']']; s+=`  ${c.id}${l}"${c.label.replace(/"/g,"'")}"${r}\n`; }
+  for(const e of g.edges){ const a=e.protocol==="event"?"-.->":"-->"; s+=`  ${e.from} ${a}${e.label?`|"${e.label.replace(/"/g,"'")}"| `:" "}${e.to}\n`; } return s;
+}
+function refreshDiagram(){ renderMermaid(mermaidOf(state.graph)); drawOverlay(); }
+
+$("analyzeBtn").onclick = async ()=>{
+  step(1); $("analyzeBtn").disabled=true; $("buildBtn").disabled=true; $("status").textContent="Muse Spark Open is reading the board…";
+  const fd=new FormData(); if(state.sample) fd.append("sample",state.sample); else fd.append("file",state.file);
+  const t=performance.now();
+  try{
+    const r=await fetch("/api/analyze",{method:"POST",body:fd}); if(!r.ok) throw new Error(await r.text());
+    const d=await r.json(); state.job=d.job_id; state.graph=d.graph; state.sam=d.sam_regions||[];
+    $("status").textContent=`Read ${d.graph.components.length} components, ${d.graph.edges.length} arrows, ${(d.graph.notes||[]).length} notes in ${((performance.now()-t)/1000).toFixed(1)}s${d.graph.sam_grounded?" · grounded by SAM 3.1":""}`;
+    renderGraph(); refreshDiagram(); step(2); $("buildBtn").disabled=false;
+  }catch(e){ $("status").textContent="Error: "+e.message; step(1,"step"); }
+  $("analyzeBtn").disabled=false;
+};
+
+function log(html){ const l=$("log"); l.insertAdjacentHTML("beforeend", html+"\n"); l.scrollTop=l.scrollHeight; }
+
+$("buildBtn").onclick = async ()=>{
+  step(3); $("buildBtn").disabled=true; $("log").innerHTML=""; $("resultCard").hidden=true; $("buildStatus").textContent="Building…";
+  const r=await fetch(`/api/build/${state.job}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({graph:state.graph})});
+  if(!r.ok){ $("buildStatus").textContent=await r.text(); $("buildBtn").disabled=false; return; }
+  const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
+  while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf("\n\n"))>=0){ const chunk=buf.slice(0,i); buf=buf.slice(i+2); if(chunk.startsWith("data: ")) handle(JSON.parse(chunk.slice(6))); } }
+  $("buildBtn").disabled=false;
+};
+
+function handle(ev){
+  const t = ev.t!=null?`<span class="t">[${String(ev.t).padStart(5)}s]</span> `:"";
+  if(ev.type==="scaffold") log(`<span class="ok">✓ skeleton generated: ${ev.files.length} files, health tests green</span>`);
+  else if(ev.type==="thought") log(t+`<span class="th">💭 ${esc(ev.text)}</span>`);
+  else if(ev.type==="tool") log(t+`${ev.name==="write_file"?"✏️ ":"📖 "}${ev.name}(${esc(ev.detail)})${ev.lines?` · ${ev.lines} lines`:""}`);
+  else if(ev.type==="tests") log(t+`🧪 pytest → ${ev.ok?`<span class="ok">${JSON.stringify(ev.counts)} PASS</span>`:`<span class="bad">${JSON.stringify(ev.counts)} FAIL</span>\n${esc(ev.tail.slice(-500))}`}`);
+  else if(ev.type==="done") { log(t+`<span class="ok">🏁 agent finished</span>\n${esc(ev.summary||"")}`); }
+  else if(ev.type==="proving") { step(4); log(t+"🧬 mutation test: Muse Spark Open breaks the code on purpose to prove the invariant tests catch it…"); }
+  else if(ev.type==="proof") {
+    $("proof").innerHTML = ev.results.map(p=>`<div>${p.caught===true?'<span class="pass">KILLED ✓</span>':p.caught===false?'<span class="fail">SURVIVED ✗</span>':'<span class="tag">inconclusive</span>'} ${esc(p.invariant)}<div class="tag" style="font-size:12px">${esc(p.mutation||p.detail||"")}</div></div>`).join("");
+    for(const p of ev.results) log(t+`🧬 ${p.caught?'<span class="ok">mutant killed</span>':'<span class="bad">not proven</span>'}: ${esc(p.mutation||p.detail||"")}`);
+  }
+  else if(ev.type==="coverage") {
+    step(6); $("resultCard").hidden=false; $("buildStatus").textContent=`Done in ${ev.t}s`;
+    $("score").textContent=ev.score+"%"; $("tests").innerHTML = ev.tests_ok?`<span class="pass">${ev.counts.passed} tests passing</span>`:`<span class="fail">tests failing ${JSON.stringify(ev.counts)}</span>`;
+    $("cov").innerHTML = ev.items.map(i=>`<li>${i.ok?"✅":"❌"} <b>${esc(i.kind)}</b> ${esc(i.name)} <span class="tag">→ ${esc(i.where)} · ${esc(i.detail)}</span></li>`).join("");
+    $("dl").href=ev.download;
+    $("files").innerHTML = ev.files.map(f=>`<a data-f="${esc(f)}">${esc(f)}</a>`).join("");
+    $("files").querySelectorAll("a").forEach(a=>a.onclick=async()=>{ const d=await (await fetch(`/api/file/${state.job}?path=${encodeURIComponent(a.dataset.f)}`)).json(); $("code").textContent=d.content; });
+    log(t+`<span class="ok">📋 board coverage ${ev.score}%</span>`);
+  }
+  else if(ev.type==="error") log(t+`<span class="bad">error: ${esc(ev.text)}</span>`);
+}
+loadSamples();
+</script>
+</body>
+</html>

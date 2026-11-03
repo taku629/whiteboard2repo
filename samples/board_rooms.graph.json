@@ -1,0 +1,110 @@
+{
+ "title": "Room Booking System",
+ "components": [
+  {
+   "id": "web_react",
+   "label": "Web (React)",
+   "kind": "client",
+   "bbox": [
+    240,
+    325,
+    350,
+    515
+   ],
+   "responsibility": "Frontend UI for creating and viewing bookings"
+  },
+  {
+   "id": "booking_api",
+   "label": "Booking API",
+   "kind": "service",
+   "bbox": [
+    410,
+    320,
+    540,
+    520
+   ],
+   "responsibility": "Handles booking creation and room availability logic"
+  },
+  {
+   "id": "sqlite_postgres",
+   "label": "SQLite/Postgres",
+   "kind": "database",
+   "bbox": [
+    430,
+    625,
+    540,
+    815
+   ],
+   "responsibility": "Persists rooms and bookings data"
+  },
+  {
+   "id": "notifier_worker",
+   "label": "Notifier worker",
+   "kind": "worker",
+   "bbox": [
+    610,
+    360,
+    725,
+    510
+   ],
+   "responsibility": "Processes booking confirmation events and sends notifications"
+  },
+  {
+   "id": "email",
+   "label": "Email",
+   "kind": "external",
+   "bbox": [
+    750,
+    385,
+    855,
+    515
+   ],
+   "responsibility": "External email delivery service"
+  }
+ ],
+ "edges": [
+  {
+   "from": "web_react",
+   "to": "booking_api",
+   "label": "REST",
+   "protocol": "http"
+  },
+  {
+   "from": "booking_api",
+   "to": "sqlite_postgres",
+   "label": "rooms, bookings",
+   "protocol": "sql"
+  },
+  {
+   "from": "booking_api",
+   "to": "notifier_worker",
+   "label": "booking.confirmed",
+   "protocol": "event"
+  },
+  {
+   "from": "notifier_worker",
+   "to": "email",
+   "label": "",
+   "protocol": "smtp"
+  }
+ ],
+ "notes": [
+  {
+   "text": "no double booking!",
+   "invariant": "System must prevent overlapping bookings for the same room at the same time - no double booking allowed",
+   "bbox": [
+    230,
+    735,
+    365,
+    865
+   ]
+  }
+ ],
+ "questions": [],
+ "image_size": [
+  1408,
+  768
+ ],
+ "model": "meta-models/muse-spark-open",
+ "sam_grounded": false
+}
