@@ -30,7 +30,7 @@ Every system starts as boxes and arrows on a whiteboard. Then someone takes a ph
 
 API: `POST /api/resnap/{job_id}` (photo or sample) → diff + Mermaid; `POST /api/update/{job_id}` → SSE stream of the incremental update.
 
-Example run (board_rooms sample, 2026-11-03): build 84 s → 13 tests passing, board coverage 100 %, "no double booking" mutant KILLED. Re-snap with board_rooms_v2: update 199 s → 18 tests passing, coverage 100 %, new "max 3 active bookings" mutant KILLED. Times vary by run and endpoint load.
+Example run (paper_rooms sample, 2026-11-03): read 8.4 s → build 76 s → 17 tests passing, board coverage 100 %, "no double booking" mutant KILLED. Re-snap with paper_rooms_v2: diff = +Payments API, +edge "charge / REST", +rule "max 3 active bookings per user" → update 172 s → 24 tests passing, coverage 100 %, new rule's mutant KILLED. Times vary by run and endpoint load.
 
 ## Meta models used
 
