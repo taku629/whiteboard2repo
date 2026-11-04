@@ -4,6 +4,8 @@
 
 Built for the Meta Global AI Developer Hackathon (Nov 2026) · Track: Build for Your World · Solo · Everything in this repo was written during the hackathon.
 
+**Try it:** https://whiteboard2repo.onrender.com (Render free tier; first load can take ~1 min, 6 builds per hour) · **Real PR opened by Re-snap:** https://github.com/taku629/whiteboard2repo-demo/pull/1
+
 ![Read the board](media/01_read.png)
 ![Built and proven](media/02_built.png)
 
