@@ -71,7 +71,7 @@
       <div class="row samples" id="samples"></div>
       <div class="row" style="margin:10px 0">
         <label class="secondary" style="padding:8px 12px;border-radius:8px;background:#eef1f5;cursor:pointer">
-          Upload a photo <input type="file" id="file" accept="image/*" capture="environment" hidden>
+          Take / upload a photo <input type="file" id="file" accept="image/*" capture="environment" hidden>
         </label>
         <button id="analyzeBtn" disabled>Read the board</button>
         <span id="status" class="tag"></span>
@@ -116,7 +116,7 @@
       <div class="row samples" id="resnapSamples"></div>
       <div class="row" style="margin:10px 0">
         <label style="padding:8px 12px;border-radius:8px;background:#eef1f5;cursor:pointer">
-          Upload updated photo <input type="file" id="resnapFile" accept="image/*" capture="environment" hidden>
+          Take / upload updated photo <input type="file" id="resnapFile" accept="image/*" capture="environment" hidden>
         </label>
         <button id="resnapBtn" disabled>Read updated board</button>
         <span id="resnapStatus" class="tag"></span>
@@ -156,7 +156,11 @@ async function loadSamples(){
     state.sample = img.dataset.name; state.file=null; $("boardImg").src = img.src; clearOverlay(); $("analyzeBtn").disabled=false;
   });
 }
-$("file").onchange = (e)=>{ const f=e.target.files[0]; if(!f) return; state.file=f; state.sample=null; $("boardImg").src=URL.createObjectURL(f); clearOverlay(); $("analyzeBtn").disabled=false; };
+// Phone photos: shrink to <=1600px JPEG in the browser before upload (faster, under the 8 MB cap)
+async function shrink(f){ try{ const bmp=await createImageBitmap(f,{imageOrientation:"from-image"}); const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+  if(k>=1 && f.size<2e6 && f.type==="image/jpeg") return f; const c=document.createElement("canvas"); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height); const b=await new Promise(r=>c.toBlob(r,"image/jpeg",0.88)); return b?new File([b],"board.jpg",{type:"image/jpeg"}):f; }catch(e){ return f; } }
+$("file").onchange = async (e)=>{ let f=e.target.files[0]; if(!f) return; f=await shrink(f); state.file=f; state.sample=null; $("boardImg").src=URL.createObjectURL(f); clearOverlay(); $("analyzeBtn").disabled=false; };
 
 function clearOverlay(){ const c=$("overlay"); c.getContext("2d").clearRect(0,0,c.width,c.height); }
 function drawOverlay(){
@@ -272,7 +276,7 @@ function showResnap(){
     $("resnapSamples").querySelectorAll("img").forEach(i=>i.classList.remove("sel")); img.classList.add("sel");
     state.resnapSample=img.dataset.name; state.resnapFile=null; $("resnapImg").src=img.src; $("resnapImg").style.display="block"; $("resnapBtn").disabled=false; });
 }
-$("resnapFile").onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; state.resnapFile=f; state.resnapSample=null; $("resnapImg").src=URL.createObjectURL(f); $("resnapImg").style.display="block"; $("resnapBtn").disabled=false; };
+$("resnapFile").onchange=async (e)=>{ let f=e.target.files[0]; if(!f) return; f=await shrink(f); state.resnapFile=f; state.resnapSample=null; $("resnapImg").src=URL.createObjectURL(f); $("resnapImg").style.display="block"; $("resnapBtn").disabled=false; };
 $("resnapBtn").onclick = async ()=>{
   step(6); $("resnapBtn").disabled=true; $("applyBtn").disabled=true; $("resnapStatus").textContent="Muse Spark Open is reading the updated board…";
   const fd=new FormData(); if(state.resnapSample) fd.append("sample",state.resnapSample); else fd.append("file",state.resnapFile);
